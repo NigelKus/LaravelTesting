@@ -20,6 +20,18 @@
                 @csrf
                 @method('PUT')
 
+                <!-- Sales Order Code -->
+                <div class="form-group">
+                    <label for="sales_order_code">Sales Order Code</label>
+                    <input type="text" class="form-control @error('sales_order_code') is-invalid @enderror" id="sales_order_code" name="sales_order_code" value="{{ old('sales_order_code', $salesInvoice->salesOrder->code ?? '') }}" readonly>
+                    @error('sales_order_code')
+                        <span class="invalid-feedback" role="alert">
+                            <strong>{{ $message }}</strong>
+                        </span>
+                    @enderror
+                </div>
+                
+
                 <!-- Sales Invoice Code -->
                 <div class="form-group">
                     <label for="invoice_code">Invoice Code</label>
@@ -34,21 +46,17 @@
                 <!-- Customer Dropdown -->
                 <div class="form-group">
                     <label for="customer_id">Customer</label>
-                    <select class="form-control @error('customer_id') is-invalid @enderror" id="customer_id" name="customer_id" required>
-                        <option value="">Select a Customer</option>
-                        @foreach($customers as $customer)
-                            <option value="{{ $customer->id }}" {{ old('customer_id', $salesInvoice->customer_id) == $customer->id ? 'selected' : '' }}>
-                                {{ $customer->name }}
-                            </option>
-                        @endforeach
-                    </select>
+                    <input type="hidden" name="customer_id" value="{{ old('customer_id', $salesInvoice->customer_id) }}">
+                    <input type="text" class="form-control @error('customer_id') is-invalid @enderror" 
+                           id="customer_id_display" 
+                           value="{{ $customers->firstWhere('id', old('customer_id', $salesInvoice->customer_id))->name ?? 'Customer Not Found' }}" 
+                           readonly>
                     @error('customer_id')
                         <span class="invalid-feedback" role="alert">
                             <strong>{{ $message }}</strong>
                         </span>
                     @enderror
                 </div>
-
                 <!-- Description Field -->
                 <div class="form-group">
                     <label for="description">Description</label>
@@ -94,38 +102,55 @@
                                 <tr>
                                     <th>Product</th>
                                     <th>Requested</th>
-                                    <th>Quantity</th>
+                                    <th>Original Quantity</th>
                                     <th>Price</th>
                                     <th>Total</th>
+                                    <th>Remaining Quantity</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <!-- Include existing rows dynamically -->
-                                @foreach($salesInvoice->details as $detail)
-                                    @include('layouts.transactional.sales_invoice.partials.product_line_edit', [
-                                        'product_id' => $detail->product_id,  
-                                        'requested' => $detail->quantity, 
-                                        'qty' => $detail->quantity,          
-                                        'price' => $detail->price,            
-                                        'price_total' => $detail->price * $detail->quantity, 
-                                        'product' => $detail->product  
-                                    ])
+                                @foreach($salesInvoice->salesOrder->details as $salesOrderDetail)
+                                @php
+                                    $quantitySent = $salesOrderDetail->quantity_sent;
+                                
+                                    // Calculate remaining_quantity
+                                    $remainingQuantity = $salesOrderDetail->quantity - $quantitySent;
+                                
+                                    // Find the corresponding invoice detail
+                                    $invoiceDetail = $salesInvoice->details->firstWhere('product_id', $salesOrderDetail->product_id);
+                                @endphp
+                                @include('layouts.transactional.sales_invoice.partials.product_line_edit', [
+                                    'product_id' => $salesOrderDetail->product_id,  
+                                    'requested' => $invoiceDetail ? $invoiceDetail->quantity : 0, // Check if $invoiceDetail is not null
+                                    'qty' => $invoiceDetail ? $invoiceDetail->quantity : 0, // Check if $invoiceDetail is not null
+                                    'price' => $salesOrderDetail->price, // Assuming price is stored here
+                                    'price_total' => $salesOrderDetail->price * $salesOrderDetail->quantity, 
+                                    'product' => $salesOrderDetail->product,  
+                                    'quantity_sent' => $remainingQuantity + ($invoiceDetail ? $invoiceDetail->quantity : 0), // Safely access quantity
+                                    'salesorderdetail_id' => $salesOrderDetail->id,
+                                    'sales_order_id' => $salesInvoice->salesOrder->id
+                                ])
                                 @endforeach
-                            </tbody>
-                        </table>
+                                
+                                </tbody>
+                            </table>
+                            
 
-                        <!-- Hidden Product Line Template -->
-                        <table style="display: none;" id="product-line-template">
-                            @include('layouts.transactional.sales_invoice.partials.product_line_edit', [
-                                'product_id' => '',
-                                'requested' => '',
-                                'qty' => '',
-                                'price' => '',
-                                'price_total' => '',
-                                'product' => '',
-                            ])
-                        </table>
+                            <!-- Hidden Product Line Template -->
+                            <table style="display: none;" id="product-line-template">
+                                @include('layouts.transactional.sales_invoice.partials.product_line_edit', [
+                                    'product_id' => '',
+                                    'requested' => '',
+                                    'qty' => '',
+                                    'price' => '',
+                                    'price_total' => '',
+                                    'product' => '',
+                                    'quantity_sent' => '',
+                                    'salesorderdetail_id' => '',
+                                    'sales_order_id' => '',
+                                ])
+                            </table>
                     </div>
                 </div>
 
@@ -147,47 +172,63 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.1/dist/js/bootstrap.bundle.min.js"
         integrity="sha384-u1OknCvxWvY5kfmNBILK2hRnQC3Pr17a+RTT6rIHI7NnikvbZlHgTPOOmMi466C8" crossorigin="anonymous"></script>
-    <script>
-        $(document).ready(function() {
-            // Initialize Select2 on the sales order dropdown if it exists
-            if ($('#salesorder_id').length) {
-                $('#salesorder_id').select2({
-                    placeholder: 'Select a Sales Order',
-                    allowClear: true
+        <script>
+            $(document).ready(function() {
+                // Initialize Select2 on the customer dropdown if it exists
+
+        
+                // Format existing price and total fields on page load
+                $('#products-table tbody tr').each(function() {
+                    var $row = $(this);
+                    formatPrice($row.find('.price-each'));
+                    formatPrice($row.find('.price-total'));
                 });
-            }
-
-            // Event handler for input changes in the requested field
-            $(document).on('input', '.requested', function() {
-                var $this = $(this);
-                var $row = $this.closest('tr');
-                var maxQty = parseInt($row.find('.quantity').val(), 10); // Get the quantity
-                var requestedQty = parseInt($this.val(), 10); // Get the requested quantity
-                
-                // Ensure the requested quantity is at least 1 and does not exceed available quantity
-                if (requestedQty < 1) {
-                    $this.val(1); // Reset to minimum value of 1
-                    alert('Requested quantity must be at least 1.');
-                } else if (requestedQty > maxQty) {
-                    $this.val(maxQty); // Set requested quantity to maximum allowed
-                    alert('Requested quantity cannot be greater than the available quantity.');
+        
+                // Event handler for input changes in the requested field
+                $(document).on('input', '.requested', function() {
+                    var $this = $(this);
+                    var $row = $this.closest('tr');
+                    
+                    // Convert to numbers
+                    var quantitySent = parseFloat($row.find('.quantity_sent').val()) || 0; // Get quantity_sent
+                    var requestedQty = parseFloat($this.val()) || 0; // Get requested quantity
+                    
+                    // Ensure the requested quantity is at least 1 and does not exceed quantity_sent
+                    if (requestedQty < 1) {
+                        // Optionally handle minimum value here
+                    } else if (requestedQty > quantitySent) {
+                        $this.val(quantitySent); // Set requested quantity to maximum allowed
+                        alert('Requested quantity cannot be greater than the quantity sent.');
+                    }
+        
+                    updateTotal($row); // Update the total price
+                });
+        
+                // Function to update the total price
+                function updateTotal($row) {
+                    var requestedQty = parseFloat($row.find('.requested').val()) || 0;
+                    var priceEach = parseFloat($row.find('.price-each').val().replace(/,/g, '')) || 0; // Remove commas for calculation
+                    var total = requestedQty * priceEach;
+                    $row.find('.price-total').val(formatNumber(total)); // Format total with thousands separator
                 }
-
-                updateTotal($row); // Update the total price if needed
+        
+                // Function to format number with thousands separator
+                function formatNumber(num) {
+                    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                }
+        
+                // Function to format existing price fields
+                function formatPrice($input) {
+                    var value = parseFloat($input.val());
+                    if (!isNaN(value)) {
+                        $input.val(formatNumber(value));
+                    }
+                }
+        
+                // Event handler for row removal
+                $(document).on('click', '.del-row', function() {
+                    $(this).closest('tr').remove(); // Remove the closest <tr> element
+                });
             });
-
-            // Function to update the total price
-            function updateTotal($row) {
-                var requestedQty = parseFloat($row.find('.requested').val()) || 0;
-                var priceEach = parseFloat($row.find('.price-each').val()) || 0;
-                var total = requestedQty * priceEach;
-                $row.find('.price-total').val(total.toFixed(2));
-            }
-
-            // Event handler for row removal
-            $(document).on('click', '.del-row', function() {
-                $(this).closest('tr').remove(); // Remove the closest <tr> element
-            });
-        });
-    </script>
+        </script>
 @stop

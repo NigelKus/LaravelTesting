@@ -56,10 +56,12 @@ Route::prefix('admin/master/sales_order')
     Route::put('{id}', [SalesOrderController::class, 'update'])->name('update');
     Route::get('{id}', [SalesOrderController::class, 'show'])->name('show');
     Route::patch('{id}/update-status', [SalesOrderController::class, 'updateStatus'])->name('update_status');
-// routes/web.php
-Route::get('{id}/products', [SalesOrderController::class, 'getProducts'])->name('products');
-
+    Route::get('{id}/products', [SalesOrderController::class, 'getProducts'])->name('products');
+    Route::get('customer/{customerId}/orders', [SalesOrderController::class, 'getSalesOrdersByCustomer'])
+        ->name('customer.orders'); // New route for fetching sales orders
+    Route::delete('{id}', [SalesOrderController::class, 'destroy'])->name('destroy');
 });
+
 
 //Purchase Routing
 Route::prefix('admin/master/purchase')
@@ -89,6 +91,7 @@ Route::prefix('admin/transactional/sales_invoice')
         Route::patch('{id}/update-status', [SalesInvoiceController::class, 'updateStatus'])->name('update_status');
         Route::get('{id}/edit', [SalesInvoiceController::class, 'edit'])->name('edit');
         Route::put('{id}', [SalesInvoiceController::class, 'update'])->name('update');
+        Route::delete('{id}', [SalesInvoiceController::class, 'destroy'])->name('destroy');
 });
 
 //PaymentInvoice Routing

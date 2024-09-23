@@ -9,6 +9,15 @@
 @section('content')
     <div class="card">
         <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
             <!-- Sales Order Form -->
             <form method="POST" action="{{ route('sales_order.update', $salesOrder->id) }}" class="form-horizontal">
                 @csrf
@@ -73,6 +82,7 @@
                                 <tr>
                                     <th>Product</th>
                                     <th>Quantity</th>
+                                    <th>Remaining Quantity</th>
                                     <th>Price</th>
                                     <th>Total</th>
                                     <th>Action</th>
@@ -86,6 +96,7 @@
                                     'qty' => '',
                                     'price' => '',
                                     'price_total' => '',
+                                    'quantity_remaining' => '',
                                 ])
                             @else
                                 @foreach($salesOrder->details as $detail)
@@ -94,6 +105,7 @@
                                         'qty' => $detail->quantity,          
                                         'price' => $detail->price,            
                                         'price_total' => $detail->price * $detail->quantity, 
+                                        'quantity_remaining' => $detail->quantity_remaining,
                                     ])
                                 @endforeach
                             @endif
@@ -108,6 +120,7 @@
                                 'qty' => '',
                                 'price' => '',
                                 'price_total' => '',
+                                'quantity_remaining' => '',
                             ])
                         </table>
 
@@ -128,101 +141,167 @@
 <script>
     $(document).ready(function() {
         var rowCounter = $('#products-table tbody tr').length; // Initialize rowCounter based on existing rows
-
+    
         // Clone the hidden template
         var productLineTemplate = $('#product-line-template tbody').html().trim();
-
+    
+        // Initialize existing rows
+        initializeRows();
+        updateReadonlyState(); 
+        
         // Add Product Button Click Event
         $('#btn-add-product-line').on('click', function(e) {
             e.preventDefault();
             rowCounter++;
-            AddNewProductLine(rowCounter);
+            addNewProductLine(rowCounter);
         });
-
-        function AddNewProductLine(id) {
+    
+        function addNewProductLine(id) {
             let productLine = $(productLineTemplate).clone();
-
+    
             // Update the ID and row number
             productLine.find('.product-line-number').text(id);
-
+    
             // Reset input values
             productLine.find('.quantity').val('');
             productLine.find('.discount').val('');
             productLine.find('.price-each').val('');
             productLine.find('.price-total').val('');
-
+    
             // Append the new row to the table
             $('#products-table tbody').append(productLine);
-
+    
             // Initialize Select2 or similar plugin if needed
             productLine.find('.select-product').select2({
                 placeholder: 'Select Product',
                 allowClear: true
             });
-
-            // Bind events for new elements
-            bindEvents();
+    
         }
-
-        function bindEvents() {
-            // Check for duplicate products
-            $('#products-table').on('change', '.select-product', function() {
-                var $select = $(this);
-                var $row = $select.closest('tr');
-                var selectedProductId = $select.val();
-
-                // Check if the selected product is already in the table
-                if (isProductDuplicate(selectedProductId, $row)) {
-                    alert('This product has already been added.');
-                    $select.val('').trigger('change');
-                    return;
-                }
-
-                var price = $select.find('option:selected').data('price');
-                var quantity = $row.find('.quantity').val();
-
-                // Update price fields
-                $row.find('.price-each').val(price);
-                $row.find('.price-total').val(price * quantity);
+    
+        function initializeRows() {
+            $('#products-table tbody tr').each(function() {
+                formatPriceFields($(this)); // Format existing price and total fields
             });
-
-            // Update total price based on quantity
-            $('#products-table').on('input', '.quantity', function() {
-                var $input = $(this);
-                var quantity = $input.val();
-                var $row = $input.closest('tr');
-                var priceEach = $row.find('.price-each').val();
-                $row.find('.price-total').val(priceEach * quantity);
-            });
-
-            // Remove row
-            $('#products-table').on('click', '.del-row', function() {
-                $(this).closest('tr').remove();
-            });
+            // Update readonly state for existing rows
         }
-
+    
+        // Use event delegation for dynamically added elements
+        $('#products-table').on('change', '.select-product', function() {
+            var $select = $(this);
+            var $row = $select.closest('tr');
+            var selectedProductId = $select.val();
+    
+            // Check if the selected product is already in the table
+            if (isProductDuplicate(selectedProductId, $row)) {
+                alert('This product has already been added.');
+                $select.val('').trigger('change');
+                return;
+            }
+    
+            var price = parseFloat($select.find('option:selected').data('price')) || 0;
+    
+            // Update price fields
+            $row.find('.price-each').val(formatNumber(price));
+            var quantity = parseInt($row.find('.quantity').val()) || 0;
+            $row.find('.price-total').val(formatNumber(price * quantity));
+    
+        });
+    
+        // Handle quantity input changes
+        $('#products-table').on('input', '.quantity', function() {
+            var $row = $(this).closest('tr');
+            var quantity = parseInt($(this).val()) || 0; // Fallback to 0 if empty
+            var priceEach = parseFloat($row.find('.price-each').val().replace(/,/g, '')); // Remove commas for calculation
+            $row.find('.price-total').val(formatNumber(priceEach * quantity));
+    
+        });
+    
+        // Remove row
+        $('#products-table').on('click', '.del-row', function() {
+            $(this).closest('tr').remove();
+        });
+    
         function isProductDuplicate(productId, $currentRow) {
             var isDuplicate = false;
-
+    
             $('#products-table tbody tr').each(function() {
                 var $row = $(this);
-                var $select = $row.find('.select-product');
-                var currentProductId = $select.val();
-
+                var currentProductId = $row.find('.select-product').val();
+    
                 if (currentProductId && currentProductId === productId && $row.get(0) !== $currentRow.get(0)) {
                     isDuplicate = true;
                     return false; // Break out of the loop
                 }
             });
-
+    
             return isDuplicate;
         }
-
-        // Bind events for existing elements on page load
-        $('#products-table tbody tr').each(function() {
-            bindEvents();
-        });
+    
+        // Function to format number with thousands separator
+        function formatNumber(num) {
+            return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        }
+    
+        // Function to format price fields
+        function formatPriceFields($row) {
+            var priceEach = $row.find('.price-each').val();
+            var priceTotal = $row.find('.price-total').val();
+    
+            // Format and set the price and total values with thousands separators
+            if (priceEach) {
+                $row.find('.price-each').val(formatNumber(parseFloat(priceEach.replace(/,/g, ''))));
+            }
+            if (priceTotal) {
+                $row.find('.price-total').val(formatNumber(parseFloat(priceTotal.replace(/,/g, ''))));
+            }
+        }
+    
+        // Function to update readonly state based on quantity remaining
+        function updateReadonlyState() {
+            $('#products-table tbody tr').each(function() {
+                var $row = $(this);
+                var quantityRemaining = parseInt($row.find('.quantity-remaining').val()) || 0; // Get remaining quantity
+                var quantity = parseInt($row.find('.quantity').val()) || 0; // Get specified quantity
+    
+                if (quantityRemaining < quantity) {
+                    $row.find('.select-product').prop('disabled', true); // Disable product selection
+                    $row.find('.quantity').prop('readonly', true); // Set quantity input to read-only
+                    $row.find('.del-row').hide(); // Hide the delete button
+                } else {
+                    $row.find('.select-product').prop('disabled', false); // Enable product selection
+                    $row.find('.quantity').prop('readonly', false); // Make quantity input editable
+                    $row.find('.del-row').show(); // Show delete button
+                }
+            });
+        }
     });
-</script>
+            $('form').on('submit', function(e) {
+            // Enable all select-product elements before validation
+            $('#products-table tbody .select-product').prop('disabled', false);
+
+            let isValid = true;
+            let hasProduct = $('#products-table tbody tr').length > 0;
+
+            if (!hasProduct) {
+                isValid = false;
+                alert('You must add at least one product.');
+            }
+
+            $('#products-table tbody tr').each(function() {
+                let quantity = $(this).find('.quantity').val();
+                if (!quantity || quantity < 1) {
+                    isValid = false;
+                    $(this).find('.quantity').addClass('is-invalid'); // Add invalid class
+                } else {
+                    $(this).find('.quantity').removeClass('is-invalid'); // Remove invalid class
+                }
+            });
+
+            if (!isValid) {
+                e.preventDefault(); // Prevent form submission
+            }
+        });
+    </script>
     
 @stop

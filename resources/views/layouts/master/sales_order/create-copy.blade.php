@@ -9,6 +9,16 @@
 @section('content')
     <div class="card">
         <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <!-- Sales Order Form -->
             <form method="POST" action="/admin/master/sales_order/store" class="form-horizontal">
                 @csrf
@@ -116,101 +126,144 @@
     <script>
         $(document).ready(function() {
             var rowCounter = $('#products-table tbody tr').length; // Initialize rowCounter based on existing rows
-
+    
             // Clone the hidden template
             var productLineTemplate = $('#product-line-template tbody').html().trim();
-
+            
             // Add Product Button Click Event
             $('#btn-add-product-line').on('click', function(e) {
                 e.preventDefault();
                 rowCounter++;
                 AddNewProductLine(rowCounter);
             });
-
+    
             function AddNewProductLine(id) {
                 let productLine = $(productLineTemplate).clone();
-
+    
                 // Update the ID and row number
                 productLine.find('.product-line-number').text(id);
-
+    
                 // Reset input values
                 productLine.find('.quantity').val('');
                 productLine.find('.discount').val('');
                 productLine.find('.price-each').val('');
                 productLine.find('.price-total').val('');
-
+    
                 // Append the new row to the table
                 $('#products-table tbody').append(productLine);
-
+    
                 // Initialize Select2 or similar plugin if needed
                 productLine.find('.select-product').select2({
                     placeholder: 'Select Product',
                     allowClear: true
                 });
-
+    
                 // Bind events for new elements
                 bindEvents();
             }
-
+    
             function bindEvents() {
                 // Check for duplicate products
                 $('#products-table').on('change', '.select-product', function() {
                     var $select = $(this);
                     var $row = $select.closest('tr');
                     var selectedProductId = $select.val();
-
+    
                     // Check if the selected product is already in the table
                     if (isProductDuplicate(selectedProductId, $row)) {
                         alert('This product has already been added.');
                         $select.val('').trigger('change');
                         return;
                     }
-
+    
                     var price = $select.find('option:selected').data('price');
                     var quantity = $row.find('.quantity').val();
-
+    
                     // Update price fields
-                    $row.find('.price-each').val(price);
-                    $row.find('.price-total').val(price * quantity);
+                    $row.find('.price-each').val(formatNumber(price));
+                    $row.find('.price-total').val(formatNumber(price * quantity));
                 });
-
+                
                 // Update total price based on quantity
                 $('#products-table').on('input', '.quantity', function() {
                     var $input = $(this);
                     var quantity = $input.val();
                     var $row = $input.closest('tr');
-                    var priceEach = $row.find('.price-each').val();
-                    $row.find('.price-total').val(priceEach * quantity);
+                    var priceEach = $row.find('.price-each').val().replace(/,/g, ''); // Remove commas for calculation
+                    $row.find('.price-total').val(formatNumber(priceEach * quantity));
                 });
-
+    
                 // Remove row
                 $('#products-table').on('click', '.del-row', function() {
                     $(this).closest('tr').remove();
                 });
             }
-
+    
             function isProductDuplicate(productId, $currentRow) {
                 var isDuplicate = false;
-
+    
                 $('#products-table tbody tr').each(function() {
                     var $row = $(this);
                     var $select = $row.find('.select-product');
                     var currentProductId = $select.val();
-
+    
                     if (currentProductId && currentProductId === productId && $row.get(0) !== $currentRow.get(0)) {
                         isDuplicate = true;
                         return false; // Break out of the loop
                     }
                 });
-
+    
                 return isDuplicate;
             }
-
-            // Bind events for existing elements on page load
+    
+            // Format existing rows on page load
             $('#products-table tbody tr').each(function() {
                 bindEvents();
+                
+                // Trigger the change event on the select-product element
+                var $select = $(this).find('.select-product');
+                if ($select.length) {
+                    $select.trigger('change'); // This will invoke the change event and update price and total
+                }
+    
+                // Format existing price and total
+                var $row = $(this);
+                var priceEach = $row.find('.price-each').val().replace(/,/g, ''); // Remove commas for calculation
+                var priceTotal = $row.find('.price-total').val().replace(/,/g, '');
+                $row.find('.price-each').val(formatNumber(priceEach));
+                $row.find('.price-total').val(formatNumber(priceTotal));
             });
+            
+            $('form').on('submit', function(e) {
+                let isValid = true;
+                let hasProduct = $('#products-table tbody tr').length > 0;
+    
+                if (!hasProduct) {
+                    isValid = false;
+                    alert('You must add at least one product.');
+                }
+    
+                $('#products-table tbody tr').each(function() {
+                    let quantity = $(this).find('.quantity').val();
+                    if (!quantity || quantity < 1) {
+                        isValid = false;
+                        $(this).find('.quantity').addClass('is-invalid'); // Add invalid class
+                    } else {
+                        $(this).find('.quantity').removeClass('is-invalid'); // Remove invalid class
+                    }
+                });
+    
+                if (!isValid) {
+                    e.preventDefault(); // Prevent form submission
+                }
+            });
+    
+            // Function to format number with thousands separator
+            function formatNumber(num) {
+                return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
         });
     </script>
+    
     @endpush
 @stop

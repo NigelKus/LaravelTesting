@@ -3,12 +3,28 @@
 @section('title', 'Sales Order Details')
 
 @section('content_header')
-    <h1>Sales Order Details</h1>
+    <div class="d-flex justify-content-between align-items-center">
+        <h1>Sales Order Details</h1>
+        <form action="{{ route('sales_order.destroy', $salesOrder->id) }}" method="POST">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure?')">Delete</button>
+        </form>
+    </div>
 @stop
 
 @section('content')
     <div class="card">
         <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
             <!-- Sales Order Header -->
             <div class="row mb-4">
                 <div class="col-md-6">
@@ -42,6 +58,7 @@
                                 {{--     --}}
                                 <th>Price</th>
                                 <th>Quantity</th>
+                                <th>Remaining Quantity</th>
                                 <th>Total</th>
                             </tr>
                         </thead>
@@ -54,13 +71,14 @@
                                     {{-- <td>{{ $detail->status}}</td> --}}
                                     <td>{{ number_format($detail->price, 2) }}</td>
                                     <td>{{ $detail->quantity }}</td>
+                                    <td>{{ $detail->quantity_remaining }}</td>
                                     <td>{{ number_format($detail->price * $detail->quantity, 2) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                         <tfoot>
                             <tr>
-                                <th colspan="5" class="text-right">Total Price</th>
+                                <th colspan="6" class="text-right">Total Price</th>
                                 <th>{{ number_format($totalPrice, 2) }}</th>
                             </tr>
                         </tfoot>
@@ -84,6 +102,7 @@
                                 <option value="pending" {{ $salesOrder->status === 'pending' ? 'selected' : '' }}>Pending</option>
                                 <option value="completed" {{ $salesOrder->status === 'completed' ? 'selected' : '' }}>Completed</option>
                                 <option value="cancelled" {{ $salesOrder->status === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                <option value="cancelled" {{ $salesOrder->status === 'deleted' ? 'selected' : '' }}>Deleted</option>
                             </select>
                             @error('status')
                                 <span class="invalid-feedback" role="alert">

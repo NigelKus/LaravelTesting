@@ -3,25 +3,42 @@
 @section('title', 'Sales Invoice Details')
 
 @section('content_header')
+<div class="d-flex justify-content-between align-items-center">
     <h1>Sales Invoice Details</h1>
+    <form action="{{ route('sales_invoice.destroy', $salesInvoice->id) }}" method="POST">
+        @csrf
+        @method('DELETE')
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure?')">Delete</button>
+    </form>
+</div>
 @stop
 
 @section('content')
     <div class="card">
         <div class="card-body">
+            @if ($errors->any())
+                <div class="alert alert-danger">
+                    <ul>
+                        @foreach ($errors->all() as $error)
+                            <li>{{ $error }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
             <!-- Sales Invoice Header -->
             <div class="row mb-4">
                 <div class="col-md-6">
                     <!-- Left Side: Sales Invoice Details -->
                     <h4>Sales Invoice</h4>
                     <p><strong>Code:</strong> {{ $salesInvoice->code }}</p>
+                    <p><strong>Order:</strong> {{ $salesInvoice->salesOrder->code ?? 'N/A' }}</p>
                     <p><strong>Date:</strong> {{ \Carbon\Carbon::parse($salesInvoice->date)->format('Y-m-d') }}</p>
                     <p><strong>Due Date:</strong> {{ \Carbon\Carbon::parse($salesInvoice->due_date)->format('Y-m-d') }}</p>
-                    <p><strong>Customer Name:</strong> {{ $salesInvoice->customer->name }}</p>
                 </div>
                 <div class="col-md-6 text-md-right">
                     <!-- Right Side: Customer Contact Details -->
                     <h4>Customer Contact</h4>
+                    <p><strong>Customer Name:</strong> {{ $salesInvoice->customer->name }}</p>
                     <p><strong>Address:</strong> {{ $salesInvoice->customer->address }}</p>
                     <p><strong>Phone:</strong> {{ $salesInvoice->customer->phone }}</p>
                     <p><strong>Email:</strong> {{ $salesInvoice->customer->email }}</p>
@@ -46,7 +63,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach($salesInvoice->invoicedetails as $detail)
+                            @foreach($salesInvoice->details as $detail)
                             <tr>
                                 <td>{{ $detail->product->code }}</td>
                                 <td>{{ $detail->product->collection }}</td>
@@ -83,6 +100,7 @@
                                 <option value="pending" {{ $salesInvoice->status === 'pending' ? 'selected' : '' }}>Pending</option>
                                 <option value="completed" {{ $salesInvoice->status === 'completed' ? 'selected' : '' }}>Completed</option>
                                 <option value="cancelled" {{ $salesInvoice->status === 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                                <option value="cancelled" {{ $salesInvoice->status === 'deleted' ? 'selected' : '' }}>Deleted</option>
                             </select>
                             @error('status')
                                 <span class="invalid-feedback" role="alert">

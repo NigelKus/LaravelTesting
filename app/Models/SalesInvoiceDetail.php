@@ -18,11 +18,12 @@ class SalesInvoiceDetail extends Model
 
     // Define fillable fields
     protected $fillable = [
-        'invociesales_id',
+        'invoicesales_id',
         'product_id',
         'quantity',
         'price',
         'status',
+        'salesdetail_id',
     ];
 
     // Define relationships
@@ -33,9 +34,9 @@ class SalesInvoiceDetail extends Model
 
     public function product()
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class, 'product_id');
     }
-
+    
     /**
      * Get the latest sales order ID.
      *
@@ -46,6 +47,13 @@ class SalesInvoiceDetail extends Model
         return self::orderBy('id', 'desc')->pluck('id')->first();
     }
 
-
+    public function salesOrderDetail()
+    {
+        return $this->belongsTo(SalesOrderDetail::class, 'salesdetail_id');
+    }
     
+        public function salesOrder()
+    {
+        return $this->belongsTo(SalesOrder::class, 'salesorder_id');
+    }
 }

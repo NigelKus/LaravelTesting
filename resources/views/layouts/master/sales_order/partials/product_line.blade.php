@@ -18,7 +18,7 @@
     </td>
     <td>
         <!-- Display error message for quantity input -->
-        <input type="number" name="qtys[]" class="form-control quantity @error('qtys.*') is-invalid @enderror" value="{{ $qty }}" min="1"  />
+        <input type="number" name="qtys[]" class="form-control quantity @error('qtys.*') is-invalid @enderror" value="{{ $qty }}" min="1" />
         <!-- Display error message for quantity input -->
         @error('qtys.*')
             <span class="invalid-feedback" role="alert">

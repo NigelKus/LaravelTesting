@@ -4,6 +4,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class SalesorderDetail extends Model
 {
@@ -18,10 +19,14 @@ class SalesorderDetail extends Model
         'quantity',
         'price',
         'status',
-        'quantity_sent',
     ];
 
     
+
+    public function salesInvoiceDetail()
+    {
+        return $this->hasMany(SalesInvoiceDetail::class, 'salesdetail_id');
+    }
 
     public function salesorder()
     {
@@ -33,106 +38,113 @@ class SalesorderDetail extends Model
         return $this->belongsTo(Product::class, 'product_id');
     }
 
-    // public static function checkAndUpdateStatus($salesOrderId, $productId, $quantity)
-    // {
-    //     $details = self::where('salesorder_id', $salesOrderId)
-    //         ->where('product_id', $productId)
-    //         ->get();
-
-    //     $totalQuantitySent = $details->sum('quantity_sent') + $quantity;
-
-    //     $totalQuantity = $details->sum('quantity');
-        
-    //     if ($totalQuantitySent >= $totalQuantity) {
-    //         $salesOrder = SalesOrder::find($salesOrderId);
-    //         if ($salesOrder) {
-    //             $salesOrder->status = 'completed';
-    //             $salesOrder->save();
-    //         }
-
-    //         return true;
-    //     }
-
-    // }
-    public static function checkAndUpdateStatus($salesOrderId, $productId, $quantity)
-    {
-        // Start a transaction to ensure atomicity
-        DB::beginTransaction();
-    
-        try {
-            // Fetch the sales order details for the given sales order and product
-            $details = self::where('salesorder_id', $salesOrderId)
-                ->where('product_id', $productId)
-                ->get();
-    
-            // Calculate the total quantity already sent and add the new quantity
-            $totalQuantitySent = $details->sum('quantity_sent') + $quantity;
-    
-            // Calculate the total quantity required
-            $totalQuantity = $details->sum('quantity');
-    
-            // Fetch the corresponding sales order
-            $salesOrder = SalesOrder::find($salesOrderId);
-    
-            if (!$salesOrder) {
-                throw new \Exception('Sales order not found.');
-            }
-    
-            // Check if the total quantity sent meets or exceeds the total quantity required
-            if ($totalQuantitySent >= $totalQuantity) {
-                // Update the sales order status to completed
-                $salesOrder->status = 'completed';
-            } else {
-                // Update the sales order status to pending
-                $salesOrder->status = 'pending';
-            }
-    
-            // Save the sales order status
-            $salesOrder->save();
-    
-            // Commit the transaction
-            DB::commit();
-    
-            return true;
-    
-        } catch (\Exception $e) {
-            // Rollback the transaction in case of error
-            DB::rollback();
-    
-            // Handle the exception (log it, rethrow it, etc.)
-            return false;
-        }
-    }
-    
     public function getQuantitySentAttribute()
     {
-        // Directly use the quantity_sent attribute if available
-        return $this->attributes['quantity_sent'] ?? 0;
-    }
-    public function getQuantityRemainingAttribute() {
-        return $this->quantity - $this->quantity_sent;
-    }
-
-    protected static function boot()
-    {
-        parent::boot();
-
-        // Listen for model updates
-        static::updated(function ($detail) {
-            // Update related sales order status
-            $salesOrder = SalesOrder::find($detail->salesorder_id);
-            if ($salesOrder) {
-                self::updateSalesOrderStatus($salesOrder);
-            }
-        });
+        return $this->SalesInvoiceDetail()
+            ->where('status', 'pending')
+            ->sum('quantity') ;
     }
     
-    // public function getQuantitySentAttribute() {
-    //     $result = 0;
-    //     foreach ($this->shipmentDetails as $det) {
-    //         $result += $det->qty;
-    //         $result += $det->quantity;
-    //     }
-    //     return $result;
-    // }
+    public function getQuantityRemainingAttribute() 
+    {
+        return $this->quantity - $this->quantity_sent;
+    }
+    
+    public function setQuantitySentAttribute($value)
+    {
+        // Ensure $value is an integer and handle any necessary logic
+        $this->attributes['quantity_sent'] = (int) $value;
+
+        // Save the changes to the database
+        $this->save();
+    }
+
+    public function adjustQuantityRemaining($amount)
+    {
+        // Access the current quantity remaining
+        $currentRemaining = $this->quantity_remaining; // This uses the accessor
+
+        // Calculate the new remaining quantity
+        $currentRemaining = $currentRemaining += $amount;
+        
+    }
+    
+
+    public static function checkAndUpdateStatus(int $salesOrderId, int $productId,int $salesOrderDetailId): bool
+    {
+        // dd($salesOrderId,$productId, $salesOrderDetailId);
+        // Fetch the SalesOrder
+        $salesOrder = SalesOrder::find($salesOrderId);
+        if (!$salesOrder) {
+            return false; // Sales order not found
+        }
+        
+        // Fetch the SalesOrderDetail
+        $salesDetail = SalesOrderDetail::where('id', $salesOrderDetailId)
+            ->where('product_id', $productId)
+            ->first();
+        // dd($salesDetail);
+        if (!$salesDetail) {
+            return false; // Sales order detail not found for the product
+        }
+        
+        $quantity_remaining = $salesDetail->quantity_remaining;
+        if ($quantity_remaining <= 0) {
+            $salesDetail->status = 'completed'; // Update status
+            $salesDetail->save();
+            
+            // $allCompleted = $salesOrder->details->every(function($detail) {
+            //     return $detail->status === 'completed'; // Ensure this returns a boolean
+            // });
+
+            // // Update SalesOrder status if all details are completed
+            //     if ($allCompleted) {
+            //         $salesOrder->status = 'completed';
+            //         $salesOrder->save();
+            //     }
+            //     return true;
+            
+            if ($salesOrder->details->every(fn($detail) => $detail->status === 'completed')) {
+                $salesOrder->status = 'completed';
+                $salesOrder->save();
+            }
+            
+            return true;
+            }
+        $salesDetail->status = 'pending'; 
+        $salesOrder->status = 'pending';
+        // dd($quantity_remaining, $salesDetail, $salesOrder);
+        $salesOrder->save();
+        $salesDetail->save();
+        
+        // dd($salesOrder, $salesDetail, $quantity_remaining, $salesDetail->quantity);
+        // Calculate the remaining quantity using accessor (optional for debugging)
+        
+
+        return false;
+    }   
+
+    public function updateSalesOrderStatus(): void
+    {
+        // Fetch the sales order record associated with this detail
+        $salesOrder = SalesOrder::find($this->salesorder_id);
+
+        if (!$salesOrder) {
+            throw new \Exception('Sales order not found.');
+        }
+
+        // Check if all details are completed
+        $allDetailsCompleted = self::where('salesorder_id', $this->salesorder_id)
+            ->every(function ($detail) {
+                return $detail->status === 'completed';
+            });
+
+        // Update sales order status based on details' statuses
+        $salesOrder->status = $allDetailsCompleted ? 'completed' : 'pending';
+
+        // Save the sales order (wrap in try-catch for debugging)
+        if (!$salesOrder->save()) {
+            throw new \Exception('Failed to save sales order');
+        }
+    }
 }

@@ -31,20 +31,22 @@ class SalesOrder extends Model
         return $this->hasMany(SalesOrderDetail::class, 'salesorder_id');
     }
 
+    public function salesorderdetail()
+    {
+        return $this->hasMany(SalesOrderDetail::class, 'salesorder_id');
+    }
+
     public function customer()
     {
         return $this->belongsTo(Customer::class, 'customer_id');
     }
-
-    /**
-     * Get the latest sales order ID.
-     *
-     * @return int|null
-     */
     public static function getLatestId()
     {
         return self::orderBy('id', 'desc')->pluck('id')->first();
     }
 
-
+        public function salesInvoiceDetail()
+    {
+        return $this->hasMany(SalesInvoiceDetail::class, 'salesorder_id');
+    }
 }

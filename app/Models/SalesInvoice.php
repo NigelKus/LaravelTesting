@@ -44,10 +44,7 @@ class SalesInvoice extends Model
         return $this->hasMany(SalesInvoiceDetail::class, 'invoicesales_id'); // Adjust 'sales_invoice_id' to the actual foreign key in your table
     }
 
-    public function invoicedetails()
-    {
-        return $this->hasMany(SalesInvoiceDetail::class, 'invoicesales_id'); // Adjust 'sales_invoice_id' to the actual foreign key in your table
-    }
+
     /**
      * Get the latest sales order ID.
      *
